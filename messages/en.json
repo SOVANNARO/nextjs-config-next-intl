@@ -1,0 +1,8 @@
+{
+  "HomePage": {
+    "title": "Hello world!",
+    "about": "Go to the about page",
+    "description": "This is a sample Next.js app with internationalization support",
+    "learnMore": "Learn more"
+  }
+}
