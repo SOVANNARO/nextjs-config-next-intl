@@ -1,36 +1,171 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Config next-intl with Next JS
 
-## Getting Started
+### Two ways config
 
-First, run the development server:
+- App Router setup with i18n routing
+- App Router setup without i18n routing
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Config with App Router setup with i18n routing
+
+### App Router and run:
+
+```tsx
+npm install next-intl
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Now, we’re going to create the following file structure:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```tsx
+├── messages
+│   ├── en.json
+│   └── ...
+├── next.config.ts
+└── src
+    ├── i18n
+    │   ├── routing.ts
+    │   ├── navigation.ts
+    │   └── request.ts
+    ├── middleware.ts
+    └── app
+        └── [locale]
+            ├── layout.tsx
+            └── page.tsx
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Let’s set up the files:
 
-## Learn More
+`messages/en.json`
 
-To learn more about Next.js, take a look at the following resources:
+```tsx
+{
+  "HomePage": {
+    "title": "Hello world!",
+    "about": "Go to the about page"
+  }
+}
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`next.config.ts`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+import {NextConfig} from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 
-## Deploy on Vercel
+const nextConfig: NextConfig = {};
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+const withNextIntl = createNextIntlPlugin();
+export default withNextIntl(nextConfig);
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`src/i18n/routing.ts`
+
+```tsx
+import { defineRouting } from "next-intl/routing";
+import { createNavigation } from "next-intl/navigation";
+
+export const routing = defineRouting({
+  // A list of all locales that are supported
+  locales: ["en", "de"],
+
+  // Used when no locale matches
+  defaultLocale: "en",
+});
+```
+
+`src/i18n/navigation.ts`
+
+```tsx
+import { createNavigation } from "next-intl/navigation";
+import { routing } from "./routing";
+
+// Lightweight wrappers around Next.js' navigation
+// APIs that consider the routing configuration
+export const { Link, redirect, usePathname, useRouter, getPathname } =
+  createNavigation(routing);
+```
+
+`src/middleware.ts`
+
+```tsx
+import createMiddleware from "next-intl/middleware";
+import { routing } from "./i18n/routing";
+
+export default createMiddleware(routing);
+
+export const config = {
+  // Match all pathnames except for
+  // - … if they start with `/api`, `/trpc`, `/_next` or `/_vercel`
+  // - … the ones containing a dot (e.g. `favicon.ico`)
+  matcher: "/((?!api|trpc|_next|_vercel|.*\\..*).*)",
+};
+```
+
+`src/i18n/request.ts`
+
+```tsx
+import { getRequestConfig } from "next-intl/server";
+import { hasLocale } from "next-intl";
+import { routing } from "./routing";
+
+export default getRequestConfig(async ({ requestLocale }) => {
+  // Typically corresponds to the `[locale]` segment
+  const requested = await requestLocale;
+  const locale = hasLocale(routing.locales, requested)
+    ? requested
+    : routing.defaultLocale;
+
+  return {
+    locale,
+    messages: (await import(`../../messages/${locale}.json`)).default,
+  };
+});
+```
+
+`src/app/[locale]/layout.tsx`
+
+```tsx
+import { NextIntlClientProvider, Locale, hasLocale } from "next-intl";
+import { notFound } from "next/navigation";
+import { routing } from "@/i18n/routing";
+
+export default async function LocaleLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode;
+  params: Promise<{ locale: string }>;
+}) {
+  // Ensure that the incoming `locale` is valid
+  const { locale } = await params;
+  if (!hasLocale(routing.locales, locale)) {
+    notFound();
+  }
+
+  return (
+    <html lang={locale}>
+      <body>
+        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+`src/app/[locale]/page.tsx`
+
+```tsx
+import { useTranslations } from "next-intl";
+import { Link } from "@/i18n/navigation";
+
+export default function HomePage() {
+  const t = useTranslations("HomePage");
+  return (
+    <div>
+      <h1>{t("title")}</h1>
+      <Link href="/about">{t("about")}</Link>
+    </div>
+  );
+}
+```
+
+Reference setup: https://next-intl.dev/docs/getting-started/app-router/with-i18n-routing
